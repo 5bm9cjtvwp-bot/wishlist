@@ -19,7 +19,7 @@ async function getFirebaseApi() {
       const auth = getAuth(app);
       const db = getFirestore(app);
       await signInAnonymously(auth);
-      return { db, collection, doc, onSnapshot, runTransaction };
+      return { db, auth, collection, doc, onSnapshot, runTransaction };
     })();
   }
   return firebaseApiPromise;
@@ -41,14 +41,32 @@ window.gift = async (button) => {
   button.dataset.busy = '1';
   button.classList.add('pop');
   try {
-    const { db, doc, runTransaction } = await getFirebaseApi();
+    const { db, auth, doc, runTransaction } = await getFirebaseApi();
     const wishRef = doc(db, 'wishes', keyFor(button));
-    await runTransaction(db, async (transaction) => {
+    const result = await runTransaction(db, async (transaction) => {
       const snap = await transaction.get(wishRef);
-      if (snap.exists() && snap.data()?.taken) return;
-      transaction.set(wishRef, { taken: true, updatedAt: Date.now() }, { merge: true });
+      const current = snap.exists() ? snap.data() : null;
+      const myUid = auth.currentUser?.uid;
+
+      if (current?.taken) {
+        if (current.reservedBy === myUid) {
+          transaction.set(wishRef, { taken: false, reservedBy: null, updatedAt: Date.now() }, { merge: true });
+          return 'cancelled';
+        }
+        return 'someone-else';
+      }
+
+      transaction.set(wishRef, { taken: true, reservedBy: myUid, updatedAt: Date.now() }, { merge: true });
+      return 'taken';
     });
-    setTaken(button, true);
+
+    if (result === 'cancelled') {
+      setTaken(button, false);
+    } else if (result === 'taken') {
+      setTaken(button, true);
+    } else {
+      setTaken(button, true);
+    }
   } catch (error) {
     console.error('Firebase gift error:', error);
     button.textContent = '🎁 попробуй ещё раз';
