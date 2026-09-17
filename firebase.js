@@ -49,7 +49,7 @@ window.gift = async (button) => {
       const myUid = auth.currentUser?.uid;
 
       if (current?.taken) {
-        if (current.reservedBy === myUid) {
+        if (current.reservedBy === myUid || !current.reservedBy) {
           transaction.set(wishRef, { taken: false, reservedBy: null, updatedAt: Date.now() }, { merge: true });
           return 'cancelled';
         }
@@ -62,8 +62,6 @@ window.gift = async (button) => {
 
     if (result === 'cancelled') {
       setTaken(button, false);
-    } else if (result === 'taken') {
-      setTaken(button, true);
     } else {
       setTaken(button, true);
     }
